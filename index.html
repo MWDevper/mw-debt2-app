@@ -533,7 +533,7 @@
     <script>
         // เพิ่ม Cache-busting mechanism
         // !!! สำคัญมาก: เปลี่ยนค่านี้ทุกครั้งที่แก้ไขโค้ดและต้องการให้บราวเซอร์มือถือโหลดโค้ดใหม่ทั้งหมด !!!
-        const CACHE_VERSION = 'v1.0.34'; // Updated version
+        const CACHE_VERSION = 'v1.0.35'; // Updated version for touch reordering fix
         const APP_STORAGE_KEY = 'debtorsApp';
         const APP_VERSION_KEY = 'appVersion';
 
@@ -541,13 +541,16 @@
         let currentDebtorId = null;
         let commonDescriptions = new Set(); 
         let draggedItem = null; 
-        let isDragging = false; 
         let sortingMode = false; 
 
-        let initialTouchY = 0;
-        let initialTouchX = 0;
-        const dragThreshold = 5; 
+        // New variables for touch handling
+        let initialTouchX = 0; 
+        let initialTouchY = 0; 
+        let draggedItemOffsetX = 0; // Offset of touch point from left edge of dragged item
+        let draggedItemOffsetY = 0; // Offset of touch point from top edge of dragged item
+        const dragThreshold = 5; // Pixels to move before considering it a drag
         let animationFrameId = null; // To store requestAnimationFrame ID
+        let isDragging = false; // Flag to track if actual dragging has started
 
 
         // --- Utility Functions ---
@@ -755,7 +758,7 @@
 
             sortedDebtors.forEach(debtor => {
                 const debtorCard = document.createElement('div');
-                debtorCard.className = `debtor-card ${debtor.totalDebt > 0 ? 'has-debt' : (debtor.totalDebt < 0 ? 'has-overpayment' : 'no-debt')} ${debtor.isHidden ? 'hidden' : ''}`;
+                debtorCard.className = `debtor-card ${debtor.totalDebt > 0 ? 'has-debt' : (debtor.totalDebt < 0 ? 'has-overpayment' : 'no-debt')} ${debtor.isHidden ? 'hidden' : ''} ${sortingMode ? 'sorting-mode' : ''}`; // Add sorting-mode class
                 debtorCard.dataset.id = debtor.id;
                 debtorCard.draggable = sortingMode; // Only draggable if in sorting mode
 
@@ -1258,6 +1261,27 @@
 
         // --- Drag and Drop (Reordering) Functions ---
 
+        // Utility for Reordering (to be called when saving order)
+        function saveCurrentDebtorOrder() {
+            const debtorCards = Array.from(document.getElementById('debtorList').children);
+            const newOrderIds = debtorCards.map(card => parseInt(card.dataset.id));
+
+            const reorderedDebtors = [];
+            newOrderIds.forEach(id => {
+                const debtor = debtors.find(d => d.id === id);
+                if (debtor) {
+                    reorderedDebtors.push(debtor);
+                }
+            });
+
+            // Update the 'order' property and save
+            reorderedDebtors.forEach((d, index) => {
+                d.order = index;
+            });
+            debtors = reorderedDebtors; // Update the main debtors array
+            saveDebtors();
+        }
+
         // Desktop Drag & Drop Handlers
         function handleDragStart(e) {
             if (!sortingMode) {
@@ -1303,54 +1327,28 @@
             this.style.opacity = '1'; // Reset opacity
             this.classList.remove('dragging'); // Remove dragging class
             draggedItem = null; // Clear dragged item
-
-            if (sortingMode) {
-                // Update the order of debtors based on their new DOM position
-                const debtorCards = Array.from(document.getElementById('debtorList').children);
-                const newOrderIds = debtorCards.map(card => parseInt(card.dataset.id));
-
-                const reorderedDebtors = [];
-                newOrderIds.forEach(id => {
-                    const debtor = debtors.find(d => d.id === id);
-                    if (debtor) {
-                        reorderedDebtors.push(debtor);
-                    }
-                });
-
-                // Update the 'order' property and save
-                reorderedDebtors.forEach((d, index) => {
-                    d.order = index;
-                });
-                debtors = reorderedDebtors; // Update the main debtors array
-                saveDebtors();
-                // No need to re-render, as DOM is already in new order
-            }
+            // Order is NOT saved here anymore. It's saved when 'จัดเสร็จ' is clicked.
         }
 
         // Mobile Touch Reordering Handlers (mimicking drag and drop)
         function handleTouchStart(e) {
             if (!sortingMode) {
                 // If not in sorting mode, allow default behavior for card clicks (show detail)
-                return true; 
+                return true;
             }
-            e.preventDefault(); // Prevent scrolling to allow custom drag behavior
+            e.preventDefault(); // Prevent scrolling initially
             isDragging = false; // Reset drag state
             initialTouchY = e.touches[0].clientY;
             initialTouchX = e.touches[0].clientX;
             draggedItem = this;
-            this.classList.add('dragging');
 
-            // Set a timeout to activate "dragging" visuals if drag threshold is met
-            // This prevents immediate visual change for a simple tap
-            setTimeout(() => {
-                if (isDragging) { // Only apply if actual dragging started
-                    this.style.position = 'absolute';
-                    this.style.zIndex = '1000';
-                    this.style.width = this.offsetWidth + 'px'; // Maintain width
-                    this.style.height = this.offsetHeight + 'px'; // Maintain height
-                    this.style.opacity = '0.8';
-                }
-            }, 100); // Small delay
+            // Calculate offset of touch point relative to the element's top-left corner
+            const rect = draggedItem.getBoundingClientRect();
+            draggedItemOffsetX = e.touches[0].clientX - rect.left;
+            draggedItemOffsetY = e.touches[0].clientY - rect.top;
+
+            // Add an immediate visual cue, but don't apply absolute positioning yet
+            draggedItem.classList.add('dragging');
         }
 
         function handleTouchMove(e) {
@@ -1363,7 +1361,15 @@
 
             // Check if movement exceeds threshold to consider it a drag
             if (Math.abs(deltaY) > dragThreshold || Math.abs(deltaX) > dragThreshold) {
-                isDragging = true;
+                if (!isDragging) { // Only set these once when dragging is confirmed
+                    isDragging = true;
+                    // Apply absolute positioning and other drag styles once dragging is confirmed
+                    draggedItem.style.position = 'absolute';
+                    draggedItem.style.zIndex = '1000';
+                    draggedItem.style.width = draggedItem.offsetWidth + 'px'; // Maintain width
+                    draggedItem.style.height = draggedItem.offsetHeight + 'px'; // Maintain height
+                    draggedItem.style.opacity = '0.8';
+                }
             }
 
             if (isDragging) {
@@ -1372,39 +1378,30 @@
                     cancelAnimationFrame(animationFrameId);
                 }
                 animationFrameId = requestAnimationFrame(() => {
-                    // Update position relative to the initial touch position
-                    draggedItem.style.top = (currentTouchY - initialTouchY + draggedItem.offsetTop) + 'px';
-                    draggedItem.style.left = (currentTouchX - initialTouchX + draggedItem.offsetLeft) + 'px';
-                    initialTouchY = currentTouchY;
-                    initialTouchX = currentTouchX;
-                    
-                    // Logic to reorder elements dynamically during touchmove
+                    // Update position relative to the initial offset
+                    draggedItem.style.top = (currentTouchY - draggedItemOffsetY) + 'px';
+                    draggedItem.style.left = (currentTouchX - draggedItemOffsetX) + 'px';
+
                     const debtorList = document.getElementById('debtorList');
                     const children = Array.from(debtorList.children);
-                    
-                    let targetElement = null;
-                    for (const child of children) {
-                        if (child !== draggedItem && child.classList.contains('debtor-card')) {
-                            const rect = child.getBoundingClientRect();
-                            if (currentTouchY > rect.top && currentTouchY < rect.bottom &&
-                                currentTouchX > rect.left && currentTouchX < rect.right) {
-                                targetElement = child;
-                                break;
-                            }
-                        }
-                    }
+                    const draggedRect = draggedItem.getBoundingClientRect();
 
-                    if (targetElement) {
-                        const targetRect = targetElement.getBoundingClientRect();
-                        const draggedRect = draggedItem.getBoundingClientRect();
-                        
-                        // Determine if moving before or after the target based on vertical position
-                        if (draggedRect.top < targetRect.top && draggedRect.bottom > targetRect.top + targetRect.height / 2) {
-                            // Moving down, past the middle of the target
-                            debtorList.insertBefore(draggedItem, targetElement.nextSibling);
-                        } else if (draggedRect.bottom > targetRect.bottom && draggedRect.top < targetRect.bottom - targetRect.height / 2) {
-                            // Moving up, before the middle of the target
-                            debtorList.insertBefore(draggedItem, targetElement);
+                    for (let i = 0; i < children.length; i++) {
+                        const child = children[i];
+                        if (child === draggedItem) continue;
+
+                        const childRect = child.getBoundingClientRect();
+                        const draggedCenterY = draggedRect.top + draggedRect.height / 2;
+                        const childCenterY = childRect.top + childRect.height / 2;
+
+                        if (draggedCenterY < childCenterY && draggedItem.nextElementSibling !== child) {
+                            // If dragged item's center is above child's center, insert before child
+                            debtorList.insertBefore(draggedItem, child);
+                            break;
+                        } else if (draggedCenterY > childCenterY && draggedItem.previousElementSibling !== child) {
+                            // If dragged item's center is below child's center, insert after child
+                            debtorList.insertBefore(draggedItem, child.nextSibling);
+                            // No break here, as it might need to move further down
                         }
                     }
                 });
@@ -1413,7 +1410,7 @@
 
         function handleTouchEnd(e) {
             if (!draggedItem || !sortingMode) return;
-            
+
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
             }
@@ -1427,34 +1424,15 @@
             draggedItem.style.left = '';
             draggedItem.style.opacity = '1';
             draggedItem.classList.remove('dragging');
-            
-            if (isDragging) { // Only save order if an actual drag occurred
-                // Update the order of debtors based on their new DOM position
-                const debtorCards = Array.from(document.getElementById('debtorList').children);
-                const newOrderIds = debtorCards.map(card => parseInt(card.dataset.id));
 
-                const reorderedDebtors = [];
-                newOrderIds.forEach(id => {
-                    const debtor = debtors.find(d => d.id === id);
-                    if (debtor) {
-                        reorderedDebtors.push(debtor);
-                    }
-                });
-
-                reorderedDebtors.forEach((d, index) => {
-                    d.order = index;
-                });
-                debtors = reorderedDebtors;
-                saveDebtors();
-                showMessage('dashboardMessage', 'บันทึกลำดับใหม่เรียบร้อยแล้ว', 'success');
-            } else {
-                // If it was just a tap and not a drag, simulate a click for card details
+            if (!isDragging) { // If it was just a tap and not a drag, simulate a click for card details
                 // But only if it's not the hide/show button click
                 const hideShowButton = e.target.closest('.btn-hide-show');
                 if (!hideShowButton) {
                     showDebtorDetail(parseInt(draggedItem.dataset.id));
                 }
             }
+            // Order is NOT saved here anymore. It's saved when 'จัดเสร็จ' is clicked.
 
             draggedItem = null;
             isDragging = false; // Reset drag state
@@ -1524,22 +1502,23 @@
 
         // --- Toggle Sort Mode Button ---
         document.getElementById('toggleSortMode').addEventListener('click', () => {
-            sortingMode = !sortingMode; 
+            sortingMode = !sortingMode;
             const toggleSortButton = document.getElementById('toggleSortMode');
-            
-            renderDebtorList(); 
 
             if (sortingMode) {
                 toggleSortButton.textContent = 'จัดเสร็จ';
                 toggleSortButton.classList.remove('btn-secondary');
-                toggleSortButton.classList.add('btn-primary'); 
+                toggleSortButton.classList.add('btn-primary');
                 showMessage('dashboardMessage', 'เข้าสู่โหมดจัดลำดับ: แตะแล้วลากการ์ดเพื่อเปลี่ยนตำแหน่ง', 'success');
             } else {
+                // Exiting sorting mode, save the new order
+                saveCurrentDebtorOrder(); // Call the new saving function
                 toggleSortButton.textContent = 'จัดลำดับ';
                 toggleSortButton.classList.remove('btn-primary');
-                toggleSortButton.classList.add('btn-secondary'); 
+                toggleSortButton.classList.add('btn-secondary');
                 showMessage('dashboardMessage', 'บันทึกลำดับใหม่เรียบร้อยแล้ว', 'success');
             }
+            renderDebtorList(); // Re-render to reflect sorting mode visual changes (draggable attribute)
         });
     </script>
 </body>
