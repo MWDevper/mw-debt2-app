@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โปรแกรมบันทึกลูกหนี้ by MW</title>
+    <style>
+        /* CSS สำหรับจัดหน้าตา */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #ecf0e1;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        /* Changed h1 size for "โปรแกรมบันทึกลูกหนี้ by MW" */
+        h1 {
+            font-size: 1.2em; /* Smaller size */
+            white-space: nowrap; /* Prevent wrapping on one line if possible */
+            overflow: hidden; /* Hide overflow if it still wraps */
+            text-overflow: ellipsis; /* Add ellipsis if text is too long */
+        }
+        h2 {
+            font-size: 1.3em;
+        }
+        .dashboard, .debtor-detail, .add-debtor-section, .edit-debtor-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .dashboard-header {
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        /* Adjusted positioning for date and button */
+        .dashboard-header .btn { /* For "เพิ่มลูกหนี้ใหม่" button */
+            order: 1; /* Keep button at start */
+            margin-bottom: 5px; /* Add some space below button before date if wraps */
+        }
+        .current-date {
+            font-size: 0.9em;
+            color: #555;
+            white-space: nowrap;
+            order: 2; /* Position date after button */
+            margin-left: 10px; /* Space from button */
+        }
+        /* Media query for smaller screens to bring date closer */
+        @media (max-width: 600px) {
+            .dashboard-header {
+                flex-direction: column; /* Stack items vertically */
+                align-items: flex-start; /* Align to start */
+            }
+            .current-date {
+                margin-left: 0; /* Remove left margin */
+                margin-top: 5px; /* Add top margin below button */
+                font-size: 0.85em; /* Slightly smaller for mobile */
+            }
+            .dashboard-header .btn {
+                width: 100%; /* Make button full width on small screens */
+                box-sizing: border-box;
+            }
+        }
+
+
+        .debtor-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+            gap: 10px;
+        }
+        .debtor-card {
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex; /* Changed to flex */
+            flex-direction: column; /* Organize content in a column */
+            justify-content: space-between; 
+            align-items: flex-start; /* Align items to the start for a stacked look */
+            position: relative;
+            cursor: pointer; 
+        }
+        /* Styling for cards in sorting mode */
+        .debtor-card.sorting-mode {
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* More pronounced shadow */
+            border: 2px solid #007bff; /* Blue border to indicate sorting mode */
+            cursor: grab; /* Indicates draggable in sorting mode */
+        }
+        .debtor-card.dragging {
+            opacity: 0.8; /* Slightly less opaque for dragging state */
+            transform: scale(1.05); /* Lift and scale up slightly when dragging */
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2); /* More pronounced shadow */
+            z-index: 1000; /* Bring dragged item to front */
+            /* Do not set position:absolute/fixed here, handled by JS */
+        }
+        .debtor-card:not(.sorting-mode):hover { /* Apply hover only when NOT in sorting mode */
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        /* MODIFIED: Debtor card main row for one-line display */
+        .debtor-card-main-row { /* New container for icon, name, debt info group */
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 5px; /* Space between elements */
+            min-width: 0; /* Allow content to shrink */
+        }
+        .debtor-card h3 {
+            margin: 0;
+            font-size: 1.0em; 
+            color: #2c3e50;
+            flex-grow: 1; /* Allow name to take up available space */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0; /* Important for flex items with overflow */
+        }
+        
+        /* New: Container for due date and debt amount */
+        .debt-info-group {
+            display: flex;
+            flex-direction: column; /* Stack due date above debt amount */
+            align-items: flex-end; /* Align contents to the right */
+            flex-shrink: 0; /* Prevent from shrinking */
+            margin-left: auto; /* Push to the right */
+        }
+
+        /* MODIFIED: Debt amount display (now smaller value inside debt-info-group) */
+        .debt-amount-value { /* Renamed from debt-amount-display */
+            margin: 0;
+            font-weight: bold;
+            white-space: nowrap;
+            font-size: 0.95em; 
+        }
+        
+        /* Removed mobile specific adjustments for debtor card layout as general styles now handle it */
+
+
+        /* สีตามสถานะหนี้ */
+        .debtor-card.has-overpayment {
+            background-color: #E0F7FA;
+            border: 1px solid #80DEEA;
+        }
+        .debtor-card.has-debt {
+            background-color: #FFF3E0;
+            border: 1px solid #FFCC80;
+        }
+        .debtor-card.no-debt {
+            background-color: #E8F5E9;
+            border: 1px solid #A5D6A7;
+        }
+        .debtor-card.hidden {
+            opacity: 0.6; /* Dim hidden cards */
+            order: 999; /* Push to bottom for sorting */
+        }
+        /* New style: hide debt amount when debtor is hidden */
+        .debtor-card.hidden .debt-amount-value,
+        .debtor-card.hidden .due-date-display-card { /* Hide due date also */
+            display: none;
+        }
+
+        .btn-hide-show {
+            background: none; /* Make background transparent */
+            color: #007bff; /* Blue icon color */
+            padding: 4px; /* Smaller padding */
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1em; /* Smaller icon size for better fit */
+            transition: color 0.2s ease;
+            flex-shrink: 0; /* Prevent from shrinking */
+        }
+        .btn-hide-show:hover {
+            color: #0056b3;
+        }
+        /* Style for the eye icon to make it clickable */
+        .btn-hide-show span {
+            display: inline-block; /* Ensure span respects padding/margin */
+        }
+
+
+        .debtor-detail h3 {
+            color: #34495e;
+            font-size: 1.2em;
+        }
+        /* สีสำหรับยอดหนี้ปัจจุบันในหน้า detail */
+        #currentDebtAmount.positive {
+            color: #00838F;
+        }
+        #currentDebtAmount.negative {
+            color: #d35400;
+        }
+        #currentDebtAmount.zero {
+            color: #2E7D32;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            color: #555;
+        }
+
+        /* --- Responsive Table CSS for Mobile --- */
+        @media (max-width: 600px) {
+            table {
+                border: 0; /* Remove table border */
+            }
+            table caption {
+                font-size: 1.3em;
+            }
+            table thead {
+                display: none; /* Hide table header on small screens */
+            }
+            table tr {
+                display: block; /* Make table rows behave like blocks */
+                margin-bottom: .625em; /* Add space between rows */
+                border: 1px solid #ccc; /* Add border around each row block */
+                border-radius: 8px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+                background-color: #fafafa;
+                padding: 10px;
+            }
+            table td {
+                display: block; /* Make table cells behave like blocks */
+                border-bottom: 1px solid #eee; /* Add separator between cells */
+                text-align: right; /* Align cell content to the right */
+                padding-left: 50%; /* Make space for the label */
+                position: relative; /* For pseudo-elements */
+            }
+            table td:last-child {
+                border-bottom: 0; /* No border for the last cell in a row */
+            }
+            table td::before {
+                content: attr(data-label); /* Use data-label attribute for content */
+                position: absolute;
+                left: 6px;
+                width: 45%; /* Occupy left half for label */
+                padding-right: 10px;
+                white-space: nowrap; /* Prevent label from wrapping */
+                text-align: left; /* Align label to the left */
+                font-weight: bold;
+                color: #555;
+            }
+            /* Specific adjustments for Transaction Amount cell to keep color */
+            table td[data-label="จำนวนเงิน"] {
+                font-weight: normal; /* Override bold from ::before, as amount itself is bold */
+            }
+            table td[data-label="จำนวนเงิน"]::before {
+                font-weight: bold; /* Keep the label bold */
+            }
+        }
+        /* --- End Responsive Table CSS --- */
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-group label {
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group select { /* Add select for monthly report */
+            width: calc(100% - 18px);
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        .btn {
+            background-color: #28a745; /* Green */
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease;
+            margin-top: 5px;
+        }
+        .btn-secondary {
+            background-color: #6c757d; /* Gray */
+            margin-left: 8px;
+        }
+        .btn-danger {
+            background-color: #dc3545; /* Red */
+        }
+        .btn-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+        /* New button colors as requested */
+        #addDebtBtn {
+            background-color: #dc3545; /* Red */
+        }
+        #reduceDebtBtn {
+            background-color: #28a745; /* Green */
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .message {
+            padding: 8px;
+            margin-top: 8px;
+            border-radius: 5px;
+            display: none;
+            font-size: 0.9em;
+        }
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        /* Hidden elements for initial load (Except dashboard, handled by JS) */
+        .debtor-detail, .add-debtor-section, .edit-debtor-section { 
+            display: none; 
+        }
+        .monthly-report {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .report-history-table-container {
+            margin-top: 20px;
+            max-height: 300px; /* Limit height for scroll */
+            overflow-y: auto; /* Enable vertical scroll */
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .report-history-table-container table {
+            margin-top: 0; /* Remove top margin as it's inside container */
+        }
+
+        /* MODIFIED: Styles for due date display on cards - no longer absolute positioning */
+        .due-date-display-card {
+            font-size: 0.7em; /* Even smaller font size */
+            font-weight: normal; 
+            white-space: nowrap; 
+            text-align: right; /* Align to right */
+            color: #555; 
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1; /* Compact line height */
+        }
+        
+        /* Ensure due date text color for overdue/due soon */
+        .overdue-text {
+            color: #dc3545; /* Red */
+            font-weight: bold;
+        }
+        .due-soon-text {
+            color: #ffc107; /* Orange */
+            font-weight: bold;
+        }
+        /* Small button styling */
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8em;
+            border-radius: 4px;
+        }
+
+        /* Adjust button group in debtor detail to be inline on desktop and stacked on mobile */
+        .detail-actions {
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping */
+            gap: 8px; /* Space between buttons */
+            margin-bottom: 15px;
+        }
+        @media (max-width: 600px) {
+            .detail-actions button {
+                width: 100%; /* Full width buttons on mobile */
+                margin-left: 0 !important; /* Override margin-left from btn-secondary */
+            }
+        }
+
+    </style>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>โปรแกรมบันทึกลูกหนี้ by MW</h1>
+
+        <div class="dashboard" id="dashboardSection">
+            <div class="dashboard-header">
+                <button class="btn" id="showAddDebtorForm">เพิ่มลูกหนี้ใหม่</button>
+            </div>
+            <h2 class="current-date" id="currentDateDisplay" style="margin-top: -10px;"></h2> 
+            <div class="debtor-list" id="debtorList">
+                </div>
+            <button class="btn btn-secondary" id="toggleSortMode" style="margin-top: 15px; width: 100%;">จัดลำดับ</button>
+            <div class="message" id="dashboardMessage"></div> </div>
+
+        <hr>
+
+        <div class="add-debtor-section" id="addDebtorSection">
+            <h2>เพิ่มลูกหนี้ใหม่</h2>
+            <div class="message" id="addDebtorMessage"></div>
+            <div class="form-group">
+                <label for="newDebtorName">ชื่อลูกหนี้:</label>
+                <input type="text" id="newDebtorName" placeholder="เช่น นายสมชาย ใจดี">
+            </div>
+            <div class="form-group">
+                <label for="initialDebtAmount">ยอดหนี้เริ่มต้น (ถ้ามี):</label>
+                <input type="number" id="initialDebtAmount" value="0" min="0">
+            </div>
+            <button class="btn" id="saveNewDebtor">บันทึก</button>
+            <button class="btn btn-secondary" id="cancelAddDebtor">ยกเลิก</button>
+        </div>
+
+        <hr>
+
+        <div class="debtor-detail" id="debtorDetailSection">
+            <h2 id="debtorNameDetail">รายละเอียดหนี้ของ: [ชื่อลูกหนี้]</h2>
+            <p>ยอดหนี้ปัจจุบัน: <span id="currentDebtAmount" class="zero" style="font-weight: bold;">0.00</span> บาท</p>
+
+            <div class="detail-actions">
+                <button class="btn btn-warning btn-sm" id="showEditDebtorForm">แก้ไขชื่อลูกหนี้</button>
+                <button class="btn btn-danger btn-sm" id="deleteDebtorBtn">ลบลูกหนี้</button>
+                <button class="btn btn-secondary btn-sm" id="setRemoveDueDateBtn">ตั้ง/แก้ไข Due Date</button>
+                <input type="date" id="dueDateInput" style="display: none;">
+            </div>
+            <p id="dueDateDisplayDetail" style="font-size: 0.85em; color: #555; margin-top: 5px;"></p>
+
+            <h3>เพิ่ม/ลด จำนวนหนี้</h3>
+            <div class="message" id="debtTransactionMessage"></div>
+            <div class="form-group">
+                <label for="transactionAmount">จำนวนเงิน:</label>
+                <input type="number" id="transactionAmount" placeholder="เช่น 500" min="0">
+            </div>
+            <div class="form-group">
+                <label for="transactionDescription">รายละเอียด (เช่น ค่าสินค้า, จ่ายคืน):</label>
+                <input type="text" id="transactionDescription" placeholder="เช่น ซื้อของใช้, จ่ายค่าอาหาร" list="commonDescriptions">
+                <datalist id="commonDescriptions"></datalist> 
+            </div>
+            <button class="btn" id="addDebtBtn">เพิ่มหนี้ (+)</button>
+            <button class="btn btn-secondary" id="reduceDebtBtn">ลดหนี้ (-)</button>
+            <button class="btn btn-secondary" id="backToDashboardBtn">กลับ Dashboard</button>
+
+            <h3>ประวัติรายการหนี้ (10 รายการล่าสุด)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>วันที่และเวลา</th>
+                        <th>รายละเอียด</th>
+                        <th>จำนวนเงิน</th>
+                        <th>ประเภท</th>
+                        <th>ยอดคงเหลือ</th>
+                    </tr>
+                </thead>
+                <tbody id="debtHistoryTableBody">
+                    </tbody>
+            </table>
+
+            <div class="monthly-report">
+                <h3>รายงานสรุปหนี้รายเดือน</h3>
+                <div class="form-group">
+                    <label for="monthSelect">เลือกเดือน:</label>
+                    <select id="monthSelect"></select>
+                </div>
+                <p id="monthlySummaryResult"></p>
+                <div id="monthlyReportHistoryTableContainer" class="report-history-table-container" style="display:none;">
+                    <h4>ประวัติรายการหนี้ของเดือนนี้</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>วันที่และเวลา</th>
+                                <th>รายละเอียด</th>
+                                <th>จำนวนเงิน</th>
+                                <th>ประเภท</th>
+                                <th>ยอดคงเหลือ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthlyReportHistoryTableBody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="edit-debtor-section" id="editDebtorSection">
+            <h2>แก้ไขชื่อลูกหนี้</h2>
+            <div class="message" id="editDebtorMessage"></div>
+            <div class="form-group">
+                <label for="editDebtorNameInput">ชื่อลูกหนี้ใหม่:</label>
+                <input type="text" id="editDebtorNameInput" placeholder="ป้อนชื่อใหม่">
+            </div>
+            <button class="btn" id="saveEditedDebtorName">บันทึกการแก้ไข</button>
+            <button class="btn btn-secondary" id="cancelEditDebtor">ยกเลิก</button>
+        </div>
+
+    </div>
+
+    <script>
+        // เพิ่ม Cache-busting mechanism
+        // !!! สำคัญมาก: เปลี่ยนค่านี้ทุกครั้งที่แก้ไขโค้ดและต้องการให้บราวเซอร์มือถือโหลดโค้ดใหม่ทั้งหมด !!!
+        const CACHE_VERSION = 'v1.0.34'; // Updated version
+        const APP_STORAGE_KEY = 'debtorsApp';
+        const APP_VERSION_KEY = 'appVersion';
+
+        let debtors = [];
+        let currentDebtorId = null;
+        let commonDescriptions = new Set(); 
+        let draggedItem = null; 
+        let isDragging = false; 
+        let sortingMode = false; 
+
+        let initialTouchY = 0;
+        let initialTouchX = 0;
+        const dragThreshold = 5; 
+        let animationFrameId = null; // To store requestAnimationFrame ID
+
+
+        // --- Utility Functions ---
+
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+            return date.toLocaleString('th-TH', options);
+        }
+
+        function formatDate(date) {
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('th-TH', options);
+        }
+
+        // --- Core Section Switching Function ---
+        function showSection(sectionId, pushHistory = true) {
+            // Hide all sections first
+            document.querySelectorAll('.dashboard, .debtor-detail, .add-debtor-section, .edit-debtor-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            // Show the target section
+            document.getElementById(sectionId).style.display = 'block';
+
+            // --- History API Management ---
+            if (pushHistory) {
+                if (sectionId === 'dashboardSection') {
+                    currentDebtorId = null; // Clear current debtor when navigating to dashboard
+                    history.pushState({ section: 'dashboardSection' }, '', '#dashboard');
+                } else if (sectionId === 'debtorDetailSection' && currentDebtorId !== null) {
+                    history.pushState({ section: sectionId, debtorId: currentDebtorId }, '', `#debtor-${currentDebtorId}`);
+                } else {
+                    history.replaceState({ section: sectionId, debtorId: currentDebtorId }, '', `#${sectionId}`);
+                }
+            }
+            
+            // Render the debtor list whenever we show the dashboard
+            if (sectionId === 'dashboardSection') {
+                renderDebtorList(); // Make sure dashboard is always up-to-date
+            }
+        }
+
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `message ${type}`;
+            el.style.display = 'block';
+            setTimeout(() => {
+                el.style.display = 'none';
+            }, 3000);
+        }
+
+        // --- Data Management (Local Storage) ---
+
+        function loadDebtors() {
+            const storedVersion = localStorage.getItem(APP_VERSION_KEY);
+            const storedDebtors = localStorage.getItem(APP_STORAGE_KEY);
+
+            // Important: Check version and clear cache if mismatch
+            if (storedVersion !== CACHE_VERSION) {
+                console.warn(`App version mismatch. Stored: ${storedVersion}, Current: ${CACHE_VERSION}. Clearing old data.`);
+                localStorage.removeItem(APP_STORAGE_KEY);
+                localStorage.removeItem('commonDescriptions'); // Clear old descriptions too
+                localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); // Set new version
+                debtors = []; // Reset debtors array
+                commonDescriptions = new Set(); // Reset common descriptions
+                showMessage('dashboardMessage', 'อัปเดตเวอร์ชันแอปแล้ว ข้อมูลเก่าจะถูกรีเซ็ตหากไม่เข้ากัน', 'warning');
+                renderDebtorList(); // Render empty list or default state
+                return; // Stop further processing to avoid parsing old data
+            }
+
+            if (storedDebtors) {
+                try {
+                    const parsedDebtors = JSON.parse(storedDebtors);
+                    
+                    debtors = parsedDebtors.map(d => {
+                        let validatedDebtor = {
+                            id: typeof d.id === 'number' ? d.id : (Math.random() * 1000000000 | 0),
+                            name: typeof d.name === 'string' && d.name.length > 0 ? d.name : 'Unknown Debtor',
+                            totalDebt: typeof d.totalDebt === 'number' ? d.totalDebt : 0,
+                            history: Array.isArray(d.history) ? d.history.map(h => ({
+                                dateTime: typeof h.dateTime === 'string' ? h.dateTime : new Date().toISOString(),
+                                description: typeof h.description === 'string' ? h.description : 'Undefined',
+                                amount: typeof h.amount === 'number' ? h.amount : 0,
+                                type: ['เพิ่ม', 'ลด'].includes(h.type) ? h.type : 'Unknown',
+                                balance: typeof h.balance === 'number' ? h.balance : 0
+                            })) : [],
+                            isHidden: typeof d.isHidden === 'boolean' ? d.isHidden : false,
+                            order: typeof d.order === 'number' ? d.order : -1,
+                            dueDate: typeof d.dueDate === 'string' ? d.dueDate : null // New: dueDate field
+                        };
+                        return validatedDebtor;
+                    });
+                    
+                    // Re-order and save to ensure consistent order property
+                    debtors.sort((a, b) => a.order - b.order);
+                    debtors.forEach((d, index) => {
+                        d.order = index;
+                    });
+
+                    saveDebtors(); // Save back the cleaned and re-ordered data
+                    console.log("Debtors loaded and sanitized successfully.");
+
+                } catch (e) {
+                    console.error("Error parsing or validating stored debtors from Local Storage:", e);
+                    debtors = []; 
+                    localStorage.removeItem(APP_STORAGE_KEY); // Clear bad data
+                    localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); // Update version to avoid re-parsing old bad data
+                    showMessage('dashboardMessage', 'ข้อมูลลูกหนี้เสียหาย จะเริ่มต้นใหม่!', 'error');
+                }
+            } else {
+                debtors = [];
+                localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); // Set version for fresh start
+                console.log("No debtors found in Local Storage. Starting fresh.");
+            }
+            renderDebtorList(); // Always render after loading
+        }
+
+        function saveDebtors() {
+            localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(debtors));
+        }
+
+        function loadCommonDescriptions() {
+            const storedDescriptions = localStorage.getItem('commonDescriptions');
+            if (storedDescriptions) {
+                try {
+                    commonDescriptions = new Set(JSON.parse(storedDescriptions));
+                } catch (e) {
+                    console.error("Error parsing common descriptions from Local Storage:", e);
+                    commonDescriptions = new Set();
+                }
+            } else {
+                commonDescriptions = new Set();
+            }
+            populateCommonDescriptionsDatalist();
+        }
+
+        function saveCommonDescriptions() {
+            localStorage.setItem('commonDescriptions', JSON.stringify(Array.from(commonDescriptions)));
+        }
+
+        function addCommonDescription(description) {
+            if (description && !commonDescriptions.has(description)) {
+                commonDescriptions.add(description);
+                saveCommonDescriptions();
+                populateCommonDescriptionsDatalist(); 
+            }
+        }
+
+        function populateCommonDescriptionsDatalist() {
+            const datalist = document.getElementById('commonDescriptions');
+            datalist.innerHTML = '';
+            Array.from(commonDescriptions).forEach(desc => {
+                const option = document.createElement('option');
+                option.value = desc;
+                datalist.appendChild(option);
+            });
+        }
+
+        // --- Dashboard Functions ---
+        function calculateDueDateInfo(dueDateIso) {
+            if (!dueDateIso) {
+                return { text: '', className: '' };
+            }
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize to start of day
+            const dueDate = new Date(dueDateIso);
+            dueDate.setHours(0, 0, 0, 0); // Normalize to start of day
+
+            const diffTime = dueDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Round up for "days remaining"
+
+            let text = '';
+            let className = '';
+
+            if (diffDays < 0) {
+                text = `เกิน ${Math.abs(diffDays)} วัน`;
+                className = 'overdue-text';
+            } else if (diffDays === 0) {
+                text = 'ครบกำหนดวันนี้';
+                className = 'due-soon-text';
+            } else {
+                text = `อีก ${diffDays} วัน`;
+                className = 'due-soon-text'; 
+            }
+            return { text, className };
+        }
+
+        function renderDebtorList() {
+            const debtorListDiv = document.getElementById('debtorList');
+            // Clear existing content and all associated event listeners
+            debtorListDiv.innerHTML = '';
+
+            const sortedDebtors = [...debtors].sort((a, b) => {
+                if (a.isHidden && !b.isHidden) return 1;
+                if (!a.isHidden && b.isHidden) return -1;
+                return a.order - b.order;
+            });
+
+            if (sortedDebtors.length === 0) {
+                debtorListDiv.innerHTML = '<p style="text-align: center; color: #777;">ไม่มีลูกหนี้ในระบบ</p>';
+                return;
+            }
+
+            sortedDebtors.forEach(debtor => {
+                const debtorCard = document.createElement('div');
+                debtorCard.className = `debtor-card ${debtor.totalDebt > 0 ? 'has-debt' : (debtor.totalDebt < 0 ? 'has-overpayment' : 'no-debt')} ${debtor.isHidden ? 'hidden' : ''}`;
+                debtorCard.dataset.id = debtor.id;
+                debtorCard.draggable = sortingMode; // Only draggable if in sorting mode
+
+                const dueDateInfo = calculateDueDateInfo(debtor.dueDate);
+                let dueDateHtml = '';
+                // Only show due date on cards if debtor is NOT hidden and due date exists
+                if (dueDateInfo.text && !debtor.isHidden) {
+                    dueDateHtml = `<div class="due-date-display-card ${dueDateInfo.className}">${dueDateInfo.text}</div>`;
+                }
+
+                // Determine the displayed debt amount for the dashboard
+                let displayedDebtAmount;
+                if (debtor.totalDebt < 0) {
+                    displayedDebtAmount = `+${Math.abs(debtor.totalDebt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                } else {
+                    displayedDebtAmount = debtor.totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+
+                // MODIFIED: Restructured card content for one-line main info + stacked due date/amount
+                debtorCard.innerHTML = `
+                    <div class="debtor-card-main-row">
+                        <button class="btn-hide-show" data-id="${debtor.id}">
+                            <span class="material-icons">${debtor.isHidden ? 'visibility_off' : 'visibility'}</span>
+                        </button>
+                        <h3>${debtor.name}</h3>
+                        <div class="debt-info-group">
+                            ${dueDateHtml}
+                            <p class="debt-amount-value">${displayedDebtAmount}</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Add click listener for showing detail (only if not in sorting mode)
+                debtorCard.addEventListener('click', (event) => {
+                    if (!sortingMode) {
+                        // Check if the click originated from the hide/show button
+                        const hideShowButton = event.target.closest('.btn-hide-show');
+                        if (!hideShowButton) {
+                            showDebtorDetail(debtor.id);
+                        }
+                    }
+                });
+
+                // Add click listener for hide/show button specifically
+                const hideShowButton = debtorCard.querySelector('.btn-hide-show');
+                if (hideShowButton) {
+                    hideShowButton.addEventListener('click', (event) => {
+                        event.stopPropagation(); // Prevent card click event from firing
+                        toggleDebtorVisibility(debtor.id);
+                    });
+                }
+
+                // Drag and Drop Listeners
+                debtorCard.addEventListener('touchstart', handleTouchStart, { passive: false });
+                debtorCard.addEventListener('touchmove', handleTouchMove, { passive: false });
+                debtorCard.addEventListener('touchend', handleTouchEnd);
+                
+                debtorCard.addEventListener('dragstart', handleDragStart);
+                debtorCard.addEventListener('dragover', handleDragOver);
+                debtorCard.addEventListener('drop', handleDrop);
+                debtorCard.addEventListener('dragend', handleDragEnd);
+
+                debtorListDiv.appendChild(debtorCard);
+            });
+            updateCurrentDateDisplay();
+        }
+
+        function toggleDebtorVisibility(id) {
+            const debtor = debtors.find(d => d.id === id);
+            if (debtor) {
+                debtor.isHidden = !debtor.isHidden;
+                saveDebtors();
+                renderDebtorList(); // Re-render to apply changes and re-sort
+            }
+        }
+
+        function updateCurrentDateDisplay() {
+            const today = new Date();
+            document.getElementById('currentDateDisplay').textContent = `วันที่ปัจจุบัน: ${formatDate(today)}`;
+        }
+
+
+        // --- Add Debtor Functions ---
+        function showAddDebtorForm() {
+            document.getElementById('newDebtorName').value = '';
+            document.getElementById('initialDebtAmount').value = '0';
+            showMessage('addDebtorMessage', '', 'none'); // Clear previous messages
+            showSection('addDebtorSection');
+        }
+
+        function saveNewDebtor() {
+            const name = document.getElementById('newDebtorName').value.trim();
+            const initialAmount = parseFloat(document.getElementById('initialDebtAmount').value);
+
+            if (!name) {
+                showMessage('addDebtorMessage', 'กรุณากรอกชื่อลูกหนี้', 'error');
+                return;
+            }
+            if (isNaN(initialAmount) || initialAmount < 0) {
+                showMessage('addDebtorMessage', 'ยอดหนี้เริ่มต้นต้องเป็นตัวเลขไม่ติดลบ', 'error');
+                return;
+            }
+
+            const newId = debtors.length > 0 ? Math.max(...debtors.map(d => d.id)) + 1 : 1;
+            const newDebtor = {
+                id: newId,
+                name: name,
+                totalDebt: initialAmount,
+                history: [],
+                isHidden: false,
+                order: debtors.length, // Assign new debtor to the end of the list
+                dueDate: null // Initialize dueDate to null
+            };
+
+            if (initialAmount > 0) {
+                newDebtor.history.push({
+                    dateTime: new Date().toISOString(),
+                    description: 'ยอดหนี้เริ่มต้น',
+                    amount: initialAmount,
+                    type: 'เพิ่ม',
+                    balance: initialAmount
+                });
+                addCommonDescription('ยอดหนี้เริ่มต้น');
+            }
+
+            debtors.push(newDebtor);
+            saveDebtors();
+            showMessage('addDebtorMessage', `เพิ่มลูกหนี้ "${name}" สำเร็จ!`, 'success');
+            renderDebtorList();
+            setTimeout(() => showSection('dashboardSection'), 1000);
+        }
+
+        // --- Debtor Detail Functions ---
+
+        // Function to update the due date display in the debtor detail section
+        function updateDueDateDisplay(debtor) {
+            const dueDateDisplayEl = document.getElementById('dueDateDisplayDetail');
+            if (debtor.dueDate) {
+                const dueDate = new Date(debtor.dueDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                dueDate.setHours(0, 0, 0, 0);
+
+                const diffTime = dueDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Round up for "days remaining"
+
+                let displayHtml = `<strong>ครบกำหนด:</strong> ${formatDate(dueDate)}`;
+                if (diffDays < 0) {
+                    displayHtml += ` <span class="overdue-text">(เกิน ${Math.abs(diffDays)} วัน)</span>`;
+                } else if (diffDays === 0) {
+                    displayHtml += ` <span class="due-soon-text">(วันนี้)</span>`;
+                } else if (diffDays <= 5) { // For "due soon" dates, still show days
+                    displayHtml += ` <span class="due-soon-text">(อีก ${diffDays} วัน)</span>`;
+                } else { // For far future dates, still show days
+                    displayHtml += ` <span class="due-soon-text">(อีก ${diffDays} วัน)</span>`;
+                }
+                dueDateDisplayEl.innerHTML = displayHtml;
+                document.getElementById('setRemoveDueDateBtn').textContent = 'ลบ Due Date';
+            } else {
+                dueDateDisplayEl.innerHTML = 'ไม่มี Due Date กำหนด';
+                document.getElementById('setRemoveDueDateBtn').textContent = 'ตั้ง/แก้ไข Due Date';
+            }
+        }
+
+        // Event Listener for "Set/Edit Due Date" button
+        document.getElementById('setRemoveDueDateBtn').addEventListener('click', () => {
+            const dueDateInput = document.getElementById('dueDateInput');
+            const currentDebtor = debtors.find(d => d.id === currentDebtorId);
+
+            if (!currentDebtor) return;
+
+            if (dueDateInput.style.display === 'none') {
+                // Show the date input
+                dueDateInput.style.display = 'inline-block';
+                if (currentDebtor.dueDate) {
+                    dueDateInput.value = currentDebtor.dueDate; // Pre-fill if exists
+                } else {
+                    dueDateInput.value = ''; // Clear if no due date
+                }
+                dueDateInput.focus();
+            } else {
+                // Hide and potentially clear the date input if "ลบ Due Date" was clicked
+                if (document.getElementById('setRemoveDueDateBtn').textContent === 'ลบ Due Date') {
+                    currentDebtor.dueDate = null; // Clear due date
+                    saveDebtors();
+                    updateDueDateDisplay(currentDebtor);
+                    showMessage('debtTransactionMessage', 'ลบ Due Date เรียบร้อยแล้ว', 'success');
+                }
+                dueDateInput.style.display = 'none';
+                dueDateInput.value = ''; // Always clear input when hiding
+            }
+        });
+
+        // Event Listener for when a date is selected in the input
+        document.getElementById('dueDateInput').addEventListener('change', (event) => {
+            const selectedDate = event.target.value; // This will be in 'YYYY-MM-DD' format
+            const currentDebtor = debtors.find(d => d.id === currentDebtorId);
+
+            if (currentDebtor) {
+                currentDebtor.dueDate = selectedDate;
+                saveDebtors();
+                updateDueDateDisplay(currentDebtor);
+                showMessage('debtTransactionMessage', 'บันทึก Due Date เรียบร้อยแล้ว', 'success');
+            }
+            document.getElementById('dueDateInput').style.display = 'none'; // Hide after selection
+        });
+
+        function showDebtorDetail(id) {
+            currentDebtorId = id;
+            const debtor = debtors.find(d => d.id === id);
+            if (!debtor) {
+                showSection('dashboardSection');
+                return;
+            }
+
+            document.getElementById('debtorNameDetail').textContent = `รายละเอียดหนี้ของ: ${debtor.name}`;
+            document.getElementById('currentDebtAmount').textContent = debtor.totalDebt.toFixed(2);
+            // Add logic to set color based on debt amount
+            const debtAmountEl = document.getElementById('currentDebtAmount');
+            debtAmountEl.className = ''; // Reset classes
+            if (debtor.totalDebt > 0) {
+                debtAmountEl.classList.add('positive');
+            } else if (debtor.totalDebt < 0) {
+                debtAmountEl.classList.add('negative');
+            } else {
+                debtAmountEl.classList.add('zero');
+            }
+
+            renderDebtHistory(debtor);
+            populateMonthlyReportSelect(debtor);
+            renderMonthlyReport(debtor); // Render initial monthly report
+
+            // Call the new function to update due date display
+            updateDueDateDisplay(debtor);
+
+            showSection('debtorDetailSection');
+        }
+
+        function addDebt() {
+            const amount = parseFloat(document.getElementById('transactionAmount').value);
+            const description = document.getElementById('transactionDescription').value.trim();
+
+            if (isNaN(amount) || amount <= 0) {
+                showMessage('debtTransactionMessage', 'กรุณากรอกจำนวนเงินที่ถูกต้อง', 'error');
+                return;
+            }
+            if (!description) {
+                showMessage('debtTransactionMessage', 'กรุณากรอกรายละเอียด', 'error');
+                return;
+            }
+
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            if (debtor) {
+                debtor.totalDebt += amount;
+                debtor.history.unshift({
+                    dateTime: new Date().toISOString(),
+                    description: description,
+                    amount: amount,
+                    type: 'เพิ่ม',
+                    balance: debtor.totalDebt
+                });
+                addCommonDescription(description); // Add to common descriptions
+                saveDebtors();
+                showMessage('debtTransactionMessage', 'เพิ่มหนี้สำเร็จ!', 'success');
+                document.getElementById('transactionAmount').value = '';
+                document.getElementById('transactionDescription').value = '';
+                showDebtorDetail(currentDebtorId); // Re-render detail view
+            }
+        }
+
+        function reduceDebt() {
+            const amount = parseFloat(document.getElementById('transactionAmount').value);
+            const description = document.getElementById('transactionDescription').value.trim();
+
+            if (isNaN(amount) || amount <= 0) {
+                showMessage('debtTransactionMessage', 'กรุณากรอกจำนวนเงินที่ถูกต้อง', 'error');
+                return;
+            }
+            if (!description) {
+                showMessage('debtTransactionMessage', 'กรุณากรอกรายละเอียด', 'error');
+                return;
+            }
+
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            if (debtor) {
+                debtor.totalDebt -= amount;
+                debtor.history.unshift({
+                    dateTime: new Date().toISOString(),
+                    description: description,
+                    amount: amount,
+                    type: 'ลด',
+                    balance: debtor.totalDebt
+                });
+                addCommonDescription(description); // Add to common descriptions
+                saveDebtors();
+                showMessage('debtTransactionMessage', 'ลดหนี้สำเร็จ!', 'success');
+                document.getElementById('transactionAmount').value = '';
+                document.getElementById('transactionDescription').value = '';
+                showDebtorDetail(currentDebtorId); // Re-render detail view
+            }
+        }
+
+        function renderDebtHistory(debtor) {
+            const historyTableBody = document.getElementById('debtHistoryTableBody');
+            historyTableBody.innerHTML = '';
+            // Display only the last 10 entries
+            const recentHistory = debtor.history.slice(0, 10);
+
+            if (recentHistory.length === 0) {
+                historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">ไม่มีประวัติรายการหนี้</td></tr>';
+                return;
+            }
+
+            recentHistory.forEach(record => {
+                const row = historyTableBody.insertRow();
+                row.insertCell().setAttribute('data-label', 'วันที่และเวลา');
+                row.cells[0].textContent = formatDateTime(record.dateTime);
+
+                row.insertCell().setAttribute('data-label', 'รายละเอียด');
+                row.cells[1].textContent = record.description;
+
+                const amountCell = row.insertCell();
+                amountCell.setAttribute('data-label', 'จำนวนเงิน');
+                amountCell.textContent = record.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                amountCell.style.fontWeight = 'bold'; // Keep amount bold
+                amountCell.style.color = record.type === 'เพิ่ม' ? '#dc3545' : '#28a745'; // Red for increase, green for decrease
+
+                row.insertCell().setAttribute('data-label', 'ประเภท');
+                row.cells[3].textContent = record.type;
+
+                const balanceCell = row.insertCell();
+                balanceCell.setAttribute('data-label', 'ยอดคงเหลือ');
+                balanceCell.textContent = record.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                balanceCell.style.fontWeight = 'bold'; // Keep balance bold
+                if (record.balance > 0) {
+                    balanceCell.style.color = '#00838F'; // Positive debt
+                } else if (record.balance < 0) {
+                    balanceCell.style.color = '#d35400'; // Overpayment
+                } else {
+                    balanceCell.style.color = '#2E7D32'; // Zero debt
+                }
+            });
+        }
+
+        // --- Monthly Report Functions ---
+        function populateMonthlyReportSelect(debtor) {
+            const monthSelect = document.getElementById('monthSelect');
+            monthSelect.innerHTML = ''; // Clear previous options
+
+            // Get all unique months from history
+            const months = new Set();
+            debtor.history.forEach(record => {
+                const date = new Date(record.dateTime);
+                const yearMonth = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                months.add(yearMonth);
+            });
+
+            // Sort months in descending order (most recent first)
+            const sortedMonths = Array.from(months).sort().reverse();
+
+            // Add options to select
+            sortedMonths.forEach(yearMonth => {
+                const option = document.createElement('option');
+                option.value = yearMonth;
+                const [year, month] = yearMonth.split('-');
+                option.textContent = `${new Date(year, month - 1).toLocaleString('th-TH', { month: 'long', year: 'numeric' })}`;
+                monthSelect.appendChild(option);
+            });
+
+            // Add event listener for change
+            monthSelect.onchange = () => renderMonthlyReport(debtor);
+
+            // Select the current month if available, otherwise the first option
+            const today = new Date();
+            const currentYearMonth = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+            if (sortedMonths.includes(currentYearMonth)) {
+                monthSelect.value = currentYearMonth;
+            } else if (sortedMonths.length > 0) {
+                monthSelect.value = sortedMonths[0]; // Select the most recent month
+            }
+        }
+
+        function renderMonthlyReport(debtor) {
+            const monthSelect = document.getElementById('monthSelect');
+            const selectedYearMonth = monthSelect.value;
+            const monthlySummaryResult = document.getElementById('monthlySummaryResult');
+            const monthlyReportHistoryTableBody = document.getElementById('monthlyReportHistoryTableBody');
+            const monthlyReportHistoryTableContainer = document.getElementById('monthlyReportHistoryTableContainer');
+
+            monthlyReportHistoryTableBody.innerHTML = ''; // Clear previous history
+            monthlyReportHistoryTableContainer.style.display = 'none'; // Hide table initially
+
+            if (!selectedYearMonth) {
+                monthlySummaryResult.textContent = 'กรุณาเลือกเดือน';
+                return;
+            }
+
+            const [targetYear, targetMonth] = selectedYearMonth.split('-').map(Number);
+
+            let totalAdded = 0;
+            let totalReduced = 0;
+            const monthlyHistory = [];
+
+            debtor.history.forEach(record => {
+                const recordDate = new Date(record.dateTime);
+                if (recordDate.getFullYear() === targetYear && (recordDate.getMonth() + 1) === targetMonth) {
+                    if (record.type === 'เพิ่ม') {
+                        totalAdded += record.amount;
+                    }
+                    else if (record.type === 'ลด') {
+                        totalReduced += record.amount;
+                    }
+                    monthlyHistory.push(record);
+                }
+            });
+
+            // Sort monthly history by dateTime (newest first)
+            monthlyHistory.sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+
+            monthlySummaryResult.innerHTML = `
+                สรุปรายการเดือน ${new Date(targetYear, targetMonth - 1).toLocaleString('th-TH', { month: 'long', year: 'numeric' })}:<br>
+                ยอดเพิ่มหนี้: <strong>${totalAdded.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท</strong><br>
+                ยอดลดหนี้: <strong>${totalReduced.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท</strong>
+            `;
+
+            if (monthlyHistory.length > 0) {
+                monthlyReportHistoryTableContainer.style.display = 'block';
+                monthlyHistory.forEach(record => {
+                    const row = monthlyReportHistoryTableBody.insertRow();
+                    row.insertCell().setAttribute('data-label', 'วันที่และเวลา');
+                    row.cells[0].textContent = formatDateTime(record.dateTime);
+
+                    row.insertCell().setAttribute('data-label', 'รายละเอียด');
+                    row.cells[1].textContent = record.description;
+
+                    const amountCell = row.insertCell();
+                    amountCell.setAttribute('data-label', 'จำนวนเงิน');
+                    amountCell.textContent = record.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    amountCell.style.fontWeight = 'bold';
+                    amountCell.style.color = record.type === 'เพิ่ม' ? '#dc3545' : '#28a745';
+
+                    row.insertCell().setAttribute('data-label', 'ประเภท');
+                    row.cells[3].textContent = record.type;
+
+                    const balanceCell = row.insertCell();
+                    balanceCell.setAttribute('data-label', 'ยอดคงเหลือ');
+                    balanceCell.textContent = record.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    balanceCell.style.fontWeight = 'bold';
+                    if (record.balance > 0) {
+                        balanceCell.style.color = '#00838F';
+                    } else if (record.balance < 0) {
+                        balanceCell.style.color = '#d35400';
+                    } else {
+                        balanceCell.style.color = '#2E7D32';
+                    }
+                });
+            } else {
+                monthlyReportHistoryTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">ไม่มีรายการในเดือนนี้</td></tr>';
+            }
+        }
+
+        // --- Edit Debtor Functions ---
+        function showEditDebtorForm() {
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            if (debtor) {
+                document.getElementById('editDebtorNameInput').value = debtor.name;
+                showMessage('editDebtorMessage', '', 'none'); // Clear previous messages
+                showSection('editDebtorSection');
+            }
+        }
+
+        function saveEditedDebtorName() {
+            const newName = document.getElementById('editDebtorNameInput').value.trim();
+            if (!newName) {
+                showMessage('editDebtorMessage', 'กรุณากรอกชื่อลูกหนี้', 'error');
+                return;
+            }
+
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            if (debtor) {
+                debtor.name = newName;
+                saveDebtors();
+                showMessage('editDebtorMessage', 'แก้ไขชื่อลูกหนี้สำเร็จ!', 'success');
+                showDebtorDetail(currentDebtorId); // Re-render detail with new name
+            }
+        }
+
+        function deleteDebtor() {
+            if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบลูกหนี้รายนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้!')) {
+                debtors = debtors.filter(d => d.id !== currentDebtorId);
+                // Re-assign order after deletion
+                debtors.forEach((d, index) => {
+                    d.order = index;
+                });
+                saveDebtors();
+                showMessage('dashboardMessage', 'ลบลูกหนี้สำเร็จ!', 'success');
+                showSection('dashboardSection'); // Go back to dashboard
+            }
+        }
+
+        // --- Drag and Drop (Reordering) Functions ---
+
+        // Desktop Drag & Drop Handlers
+        function handleDragStart(e) {
+            if (!sortingMode) {
+                e.preventDefault(); // Prevent dragging if not in sorting mode
+                return;
+            }
+            draggedItem = this;
+            setTimeout(() => {
+                this.classList.add('dragging'); // Add dragging class after a slight delay
+            }, 0);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.dataset.id); // Set data for drag
+            this.style.opacity = '0.4'; // Visual cue for dragged item
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault(); // Necessary to allow dropping
+            if (draggedItem && this !== draggedItem && this.classList.contains('debtor-card')) {
+                const boundingBox = this.getBoundingClientRect();
+                const offset = e.clientY - boundingBox.top;
+                const center = boundingBox.height / 2;
+
+                const debtorList = document.getElementById('debtorList');
+                const draggedIndex = Array.from(debtorList.children).indexOf(draggedItem);
+                const targetIndex = Array.from(debtorList.children).indexOf(this);
+
+                if (draggedIndex < targetIndex && offset > center) {
+                    // draggedItem is above and moving down, target is below center
+                    debtorList.insertBefore(draggedItem, this.nextSibling);
+                } else if (draggedIndex > targetIndex && offset < center) {
+                    // draggedItem is below and moving up, target is above center
+                    debtorList.insertBefore(draggedItem, this);
+                }
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            // Drop logic handled by handleDragOver, just need to prevent default here
+        }
+
+        function handleDragEnd(e) {
+            this.style.opacity = '1'; // Reset opacity
+            this.classList.remove('dragging'); // Remove dragging class
+            draggedItem = null; // Clear dragged item
+
+            if (sortingMode) {
+                // Update the order of debtors based on their new DOM position
+                const debtorCards = Array.from(document.getElementById('debtorList').children);
+                const newOrderIds = debtorCards.map(card => parseInt(card.dataset.id));
+
+                const reorderedDebtors = [];
+                newOrderIds.forEach(id => {
+                    const debtor = debtors.find(d => d.id === id);
+                    if (debtor) {
+                        reorderedDebtors.push(debtor);
+                    }
+                });
+
+                // Update the 'order' property and save
+                reorderedDebtors.forEach((d, index) => {
+                    d.order = index;
+                });
+                debtors = reorderedDebtors; // Update the main debtors array
+                saveDebtors();
+                // No need to re-render, as DOM is already in new order
+            }
+        }
+
+        // Mobile Touch Reordering Handlers (mimicking drag and drop)
+        function handleTouchStart(e) {
+            if (!sortingMode) {
+                // If not in sorting mode, allow default behavior for card clicks (show detail)
+                return true; 
+            }
+            e.preventDefault(); // Prevent scrolling to allow custom drag behavior
+            isDragging = false; // Reset drag state
+            initialTouchY = e.touches[0].clientY;
+            initialTouchX = e.touches[0].clientX;
+            draggedItem = this;
+            this.classList.add('dragging');
+
+            // Set a timeout to activate "dragging" visuals if drag threshold is met
+            // This prevents immediate visual change for a simple tap
+            setTimeout(() => {
+                if (isDragging) { // Only apply if actual dragging started
+                    this.style.position = 'absolute';
+                    this.style.zIndex = '1000';
+                    this.style.width = this.offsetWidth + 'px'; // Maintain width
+                    this.style.height = this.offsetHeight + 'px'; // Maintain height
+                    this.style.opacity = '0.8';
+                }
+            }, 100); // Small delay
+        }
+
+        function handleTouchMove(e) {
+            if (!draggedItem || !sortingMode) return;
+
+            const currentTouchY = e.touches[0].clientY;
+            const currentTouchX = e.touches[0].clientX;
+            const deltaY = currentTouchY - initialTouchY;
+            const deltaX = currentTouchX - initialTouchX;
+
+            // Check if movement exceeds threshold to consider it a drag
+            if (Math.abs(deltaY) > dragThreshold || Math.abs(deltaX) > dragThreshold) {
+                isDragging = true;
+            }
+
+            if (isDragging) {
+                e.preventDefault(); // Prevent scrolling during drag
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+                animationFrameId = requestAnimationFrame(() => {
+                    // Update position relative to the initial touch position
+                    draggedItem.style.top = (currentTouchY - initialTouchY + draggedItem.offsetTop) + 'px';
+                    draggedItem.style.left = (currentTouchX - initialTouchX + draggedItem.offsetLeft) + 'px';
+                    initialTouchY = currentTouchY;
+                    initialTouchX = currentTouchX;
+                    
+                    // Logic to reorder elements dynamically during touchmove
+                    const debtorList = document.getElementById('debtorList');
+                    const children = Array.from(debtorList.children);
+                    
+                    let targetElement = null;
+                    for (const child of children) {
+                        if (child !== draggedItem && child.classList.contains('debtor-card')) {
+                            const rect = child.getBoundingClientRect();
+                            if (currentTouchY > rect.top && currentTouchY < rect.bottom &&
+                                currentTouchX > rect.left && currentTouchX < rect.right) {
+                                targetElement = child;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (targetElement) {
+                        const targetRect = targetElement.getBoundingClientRect();
+                        const draggedRect = draggedItem.getBoundingClientRect();
+                        
+                        // Determine if moving before or after the target based on vertical position
+                        if (draggedRect.top < targetRect.top && draggedRect.bottom > targetRect.top + targetRect.height / 2) {
+                            // Moving down, past the middle of the target
+                            debtorList.insertBefore(draggedItem, targetElement.nextSibling);
+                        } else if (draggedRect.bottom > targetRect.bottom && draggedRect.top < targetRect.bottom - targetRect.height / 2) {
+                            // Moving up, before the middle of the target
+                            debtorList.insertBefore(draggedItem, targetElement);
+                        }
+                    }
+                });
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!draggedItem || !sortingMode) return;
+            
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+
+            // Reset styles
+            draggedItem.style.position = '';
+            draggedItem.style.zIndex = '';
+            draggedItem.style.width = '';
+            draggedItem.style.height = '';
+            draggedItem.style.top = '';
+            draggedItem.style.left = '';
+            draggedItem.style.opacity = '1';
+            draggedItem.classList.remove('dragging');
+            
+            if (isDragging) { // Only save order if an actual drag occurred
+                // Update the order of debtors based on their new DOM position
+                const debtorCards = Array.from(document.getElementById('debtorList').children);
+                const newOrderIds = debtorCards.map(card => parseInt(card.dataset.id));
+
+                const reorderedDebtors = [];
+                newOrderIds.forEach(id => {
+                    const debtor = debtors.find(d => d.id === id);
+                    if (debtor) {
+                        reorderedDebtors.push(debtor);
+                    }
+                });
+
+                reorderedDebtors.forEach((d, index) => {
+                    d.order = index;
+                });
+                debtors = reorderedDebtors;
+                saveDebtors();
+                showMessage('dashboardMessage', 'บันทึกลำดับใหม่เรียบร้อยแล้ว', 'success');
+            } else {
+                // If it was just a tap and not a drag, simulate a click for card details
+                // But only if it's not the hide/show button click
+                const hideShowButton = e.target.closest('.btn-hide-show');
+                if (!hideShowButton) {
+                    showDebtorDetail(parseInt(draggedItem.dataset.id));
+                }
+            }
+
+            draggedItem = null;
+            isDragging = false; // Reset drag state
+        }
+
+
+        // --- Event Listeners Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDebtors();
+            loadCommonDescriptions(); // Load common descriptions on startup
+            updateCurrentDateDisplay();
+
+            // Handle browser history navigation (back/forward buttons)
+            window.addEventListener('popstate', (event) => {
+                if (event.state && event.state.section) {
+                    if (event.state.section === 'debtorDetailSection' && event.state.debtorId) {
+                        showDebtorDetail(event.state.debtorId);
+                    } else {
+                        showSection(event.state.section, false); // Don't push state again
+                    }
+                } else {
+                    // Default to dashboard if no state or unknown state
+                    showSection('dashboardSection', false);
+                }
+            });
+
+            // Initial view based on URL hash or default to dashboard
+            if (window.location.hash.startsWith('#debtor-')) {
+                const debtorId = parseInt(window.location.hash.replace('#debtor-', ''));
+                if (!isNaN(debtorId)) {
+                    showDebtorDetail(debtorId);
+                } else {
+                    showSection('dashboardSection');
+                }
+            } else if (window.location.hash === '#addDebtorSection') {
+                showAddDebtorForm();
+            } else if (window.location.hash === '#dashboard') {
+                 showSection('dashboardSection');
+            }
+            else {
+                showSection('dashboardSection'); // Default view
+            }
+            // Ensure proper initial rendering for empty state or existing data
+            renderDebtorList();
+        });
+
+
+        // Add button click event listeners
+        document.getElementById('showAddDebtorForm').addEventListener('click', showAddDebtorForm);
+        document.getElementById('saveNewDebtor').addEventListener('click', saveNewDebtor);
+        document.getElementById('cancelAddDebtor').addEventListener('click', () => {
+            showSection('dashboardSection');
+        });
+
+        document.getElementById('addDebtBtn').addEventListener('click', addDebt);
+        document.getElementById('reduceDebtBtn').addEventListener('click', reduceDebt);
+        document.getElementById('backToDashboardBtn').addEventListener('click', () => {
+            showSection('dashboardSection'); 
+        });
+
+        document.getElementById('showEditDebtorForm').addEventListener('click', showEditDebtorForm);
+        document.getElementById('saveEditedDebtorName').addEventListener('click', saveEditedDebtorName);
+        document.getElementById('cancelEditDebtor').addEventListener('click', () => {
+            showDebtorDetail(currentDebtorId); 
+        });
+        document.getElementById('deleteDebtorBtn').addEventListener('click', deleteDebtor);
+
+        // --- Toggle Sort Mode Button ---
+        document.getElementById('toggleSortMode').addEventListener('click', () => {
+            sortingMode = !sortingMode; 
+            const toggleSortButton = document.getElementById('toggleSortMode');
+            
+            renderDebtorList(); 
+
+            if (sortingMode) {
+                toggleSortButton.textContent = 'จัดเสร็จ';
+                toggleSortButton.classList.remove('btn-secondary');
+                toggleSortButton.classList.add('btn-primary'); 
+                showMessage('dashboardMessage', 'เข้าสู่โหมดจัดลำดับ: แตะแล้วลากการ์ดเพื่อเปลี่ยนตำแหน่ง', 'success');
+            } else {
+                toggleSortButton.textContent = 'จัดลำดับ';
+                toggleSortButton.classList.remove('btn-primary');
+                toggleSortButton.classList.add('btn-secondary'); 
+                showMessage('dashboardMessage', 'บันทึกลำดับใหม่เรียบร้อยแล้ว', 'success');
+            }
+        });
+    </script>
+</body>
+</html>
