@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y90ZV7K3GE"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -45,6 +44,13 @@
             white-space: nowrap; /* Prevent wrapping on one line if possible */
             overflow: hidden; /* Hide overflow if it still wraps */
             text-overflow: ellipsis; /* Add ellipsis if text is too long */
+        }
+        .app-version {
+            font-size: 0.7em; /* Smaller font size for version */
+            color: #777;
+            margin-top: -10px; /* Pull it closer to the main title */
+            margin-bottom: 15px;
+            text-align: center; /* Center align for dashboard */
         }
         h2 {
             font-size: 1.3em;
@@ -301,12 +307,18 @@
         }
         .form-group input[type="text"],
         .form-group input[type="number"],
+        .form-group textarea, /* Added textarea for notes and comments */
         .form-group select { /* Add select for monthly report */
             width: calc(100% - 18px);
             padding: 8px;
             border: 1px solid #ccc;
             border-radius: 5px;
             font-size: 0.9em;
+            box-sizing: border-box; /* Include padding in width calculation */
+        }
+        .form-group textarea {
+            min-height: 80px; /* Default height for text areas */
+            resize: vertical; /* Allow vertical resizing */
         }
         .btn {
             background-color: #28a745; /* Green */
@@ -419,6 +431,50 @@
                 margin-left: 0 !important; /* Override margin-left from btn-secondary */
             }
         }
+        /* Styles for comments history */
+        .comment-history {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+            background-color: #fcfcfc;
+            max-height: 200px; /* Limit height for scroll */
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .comment-item {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #eee;
+            font-size: 0.85em;
+        }
+        .comment-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .comment-date {
+            font-size: 0.75em;
+            color: #888;
+            margin-bottom: 3px;
+        }
+        .coffee-section {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #555;
+        }
+        .coffee-section .material-icons {
+            font-size: 1em; /* Adjust icon size to match text */
+            vertical-align: middle; /* Align icon vertically with text */
+            margin-right: 3px;
+            color: #e040fb; /* Purple heart for coffee */
+        }
+        .coffee-section img {
+            display: block; /* Make QR code block level to center it */
+            margin: 10px auto 0; /* Center the QR code */
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
 
     </style>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -426,6 +482,7 @@
 <body>
     <div class="container">
         <h1>โปรแกรมบันทึกลูกหนี้ by MW</h1>
+        <p class="app-version">Version: <span id="appVersionDisplay"></span></p>
 
         <div class="dashboard" id="dashboardSection">
             <div class="dashboard-header">
@@ -522,6 +579,32 @@
                     </table>
                 </div>
             </div>
+
+            <hr>
+            <h3>บันทึกข้อมูลลูกหนี้</h3>
+            <div class="message" id="debtorNotesMessage"></div>
+            <div class="form-group">
+                <label for="debtorNotesInput">รายละเอียดเพิ่มเติมเกี่ยวกับลูกหนี้:</label>
+                <textarea id="debtorNotesInput" placeholder="บันทึกข้อมูลสำคัญเกี่ยวกับลูกหนี้ เช่น ที่อยู่, เบอร์โทร, ไลน์ไอดี, ข้อมูลติดต่ออื่นๆ, ข้อตกลงพิเศษ"></textarea>
+            </div>
+            <button class="btn" id="saveDebtorNotesBtn">บันทึก</button>
+
+            <hr>
+            <h3>ประวัติการบันทึกคอมเมนต์ / ทวงถาม</h3>
+            <div class="message" id="debtorCommentMessage"></div>
+            <div class="form-group">
+                <label for="newCommentInput">เพิ่มคอมเมนต์:</label>
+                <textarea id="newCommentInput" placeholder="เพิ่มบันทึกการทวงถาม หรือโน็ตต่างๆ"></textarea>
+            </div>
+            <button class="btn" id="addCommentBtn">บันทึกคอมเมนต์</button>
+            <div class="comment-history" id="commentHistoryContainer">
+                </div>
+
+            <div class="coffee-section">
+                <p><span class="material-icons">favorite</span>ต้องการเลี้ยงกาแฟผม</p>
+                <img id="qrCodeImage" src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=MW_Donation_Placeholder" alt="QR Code Placeholder" width="100" height="100">
+            </div>
+
         </div>
 
         <hr>
@@ -542,7 +625,7 @@
     <script>
         // เพิ่ม Cache-busting mechanism
         // !!! สำคัญมาก: เปลี่ยนค่านี้ทุกครั้งที่แก้ไขโค้ดและต้องการให้บราวเซอร์มือถือโหลดโค้ดใหม่ทั้งหมด !!!
-        const CACHE_VERSION = 'v1.0.35'; // Updated version for touch reordering fix
+        const CACHE_VERSION = 'v1.0.37'; // Updated version for touch reordering fix and new features
         const APP_STORAGE_KEY = 'debtorsApp';
         const APP_VERSION_KEY = 'appVersion';
 
@@ -617,18 +700,12 @@
         function loadDebtors() {
             const storedVersion = localStorage.getItem(APP_VERSION_KEY);
             const storedDebtors = localStorage.getItem(APP_STORAGE_KEY);
+            let needsMigration = false;
 
-            // Important: Check version and clear cache if mismatch
+            // ตรวจสอบเวอร์ชัน: หากไม่ตรงกัน ให้ตั้งค่า flag และแสดงข้อความเตือน
             if (storedVersion !== CACHE_VERSION) {
-                console.warn(`App version mismatch. Stored: ${storedVersion}, Current: ${CACHE_VERSION}. Clearing old data.`);
-                localStorage.removeItem(APP_STORAGE_KEY);
-                localStorage.removeItem('commonDescriptions'); // Clear old descriptions too
-                localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); // Set new version
-                debtors = []; // Reset debtors array
-                commonDescriptions = new Set(); // Reset common descriptions
-                showMessage('dashboardMessage', 'อัปเดตเวอร์ชันแอปแล้ว ข้อมูลเก่าจะถูกรีเซ็ตหากไม่เข้ากัน', 'warning');
-                renderDebtorList(); // Render empty list or default state
-                return; // Stop further processing to avoid parsing old data
+                console.warn(`App version mismatch. Stored: ${storedVersion || 'None'}, Current: ${CACHE_VERSION}. Attempting data migration.`);
+                needsMigration = true;
             }
 
             if (storedDebtors) {
@@ -636,6 +713,8 @@
                     const parsedDebtors = JSON.parse(storedDebtors);
                     
                     debtors = parsedDebtors.map(d => {
+                        // กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่ (notes, comments, dueDate, isHidden, order)
+                        // หากข้อมูลเก่าไม่มีฟิลด์เหล่านี้ หรือมีแต่ไม่ถูกต้อง
                         let validatedDebtor = {
                             id: typeof d.id === 'number' ? d.id : (Math.random() * 1000000000 | 0),
                             name: typeof d.name === 'string' && d.name.length > 0 ? d.name : 'Unknown Debtor',
@@ -649,33 +728,50 @@
                             })) : [],
                             isHidden: typeof d.isHidden === 'boolean' ? d.isHidden : false,
                             order: typeof d.order === 'number' ? d.order : -1,
-                            dueDate: typeof d.dueDate === 'string' ? d.dueDate : null // New: dueDate field
+                            dueDate: typeof d.dueDate === 'string' ? d.dueDate : null,
+                            notes: typeof d.notes === 'string' ? d.notes : '', // ฟิลด์ใหม่
+                            comments: Array.isArray(d.comments) ? d.comments.map(c => ({ // ฟิลด์ใหม่
+                                text: typeof c.text === 'string' ? c.text : '',
+                                timestamp: typeof c.timestamp === 'string' ? c.timestamp : new Date().toISOString()
+                            })) : []
                         };
                         return validatedDebtor;
                     });
                     
-                    // Re-order and save to ensure consistent order property
+                    // จัดเรียงลำดับใหม่และบันทึก เพื่อให้ properties 'order' ถูกต้องเสมอ
                     debtors.sort((a, b) => a.order - b.order);
                     debtors.forEach((d, index) => {
                         d.order = index;
                     });
 
-                    saveDebtors(); // Save back the cleaned and re-ordered data
+                    // บันทึกข้อมูลที่ถูกปรับปรุงแล้วกลับลง localStorage
+                    saveDebtors(); 
+                    // อัปเดตเวอร์ชันใน localStorage หลังจากโหลดและปรับปรุงข้อมูลสำเร็จ
+                    localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); 
                     console.log("Debtors loaded and sanitized successfully.");
+                    if (needsMigration) {
+                         showMessage('dashboardMessage', 'อัปเดตเวอร์ชันแอปแล้ว ข้อมูลลูกหนี้ได้รับการปรับปรุงเรียบร้อย', 'success');
+                    }
 
                 } catch (e) {
+                    // หากเกิดข้อผิดพลาดในการ parse หรือข้อมูลเสียหายจริง ๆ ค่อยล้างข้อมูล
                     console.error("Error parsing or validating stored debtors from Local Storage:", e);
                     debtors = []; 
-                    localStorage.removeItem(APP_STORAGE_KEY); // Clear bad data
-                    localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); // Update version to avoid re-parsing old bad data
+                    localStorage.removeItem(APP_STORAGE_KEY); 
+                    localStorage.removeItem('commonDescriptions'); 
+                    localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); 
                     showMessage('dashboardMessage', 'ข้อมูลลูกหนี้เสียหาย จะเริ่มต้นใหม่!', 'error');
                 }
             } else {
+                // หากไม่พบข้อมูลลูกหนี้ (ใช้งานครั้งแรก หรือหลังจากลบข้อมูลทิ้งไปแล้ว)
                 debtors = [];
-                localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); // Set version for fresh start
+                localStorage.setItem(APP_VERSION_KEY, CACHE_VERSION); 
                 console.log("No debtors found in Local Storage. Starting fresh.");
             }
-            renderDebtorList(); // Always render after loading
+            renderDebtorList();
+            document.getElementById('appVersionDisplay').textContent = CACHE_VERSION;
+            // เรียกใช้ loadCommonDescriptions() เสมอ ไม่ว่าจะเจอข้อมูลลูกหนี้หรือไม่
+            loadCommonDescriptions(); 
         }
 
         function saveDebtors() {
@@ -879,7 +975,9 @@
                 history: [],
                 isHidden: false,
                 order: debtors.length, // Assign new debtor to the end of the list
-                dueDate: null // Initialize dueDate to null
+                dueDate: null,
+                notes: '', // Initialize notes
+                comments: [] // Initialize comments
             };
 
             if (initialAmount > 0) {
@@ -1003,6 +1101,14 @@
             // Call the new function to update due date display
             updateDueDateDisplay(debtor);
 
+            // Populate and manage debtor notes
+            document.getElementById('debtorNotesInput').value = debtor.notes;
+            updateDebtorNotesButtonText();
+
+            // Render comment history
+            renderCommentHistory(debtor);
+            document.getElementById('newCommentInput').value = ''; // Clear comment input
+
             showSection('debtorDetailSection');
         }
 
@@ -1111,6 +1217,81 @@
                 }
             });
         }
+
+        // --- Debtor Notes Functions ---
+        function updateDebtorNotesButtonText() {
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            const saveButton = document.getElementById('saveDebtorNotesBtn');
+            if (debtor && debtor.notes && debtor.notes.trim().length > 0) {
+                saveButton.textContent = 'แก้ไข';
+                saveButton.classList.remove('btn');
+                saveButton.classList.add('btn-warning');
+            } else {
+                saveButton.textContent = 'บันทึก';
+                saveButton.classList.remove('btn-warning');
+                saveButton.classList.add('btn');
+            }
+        }
+
+        document.getElementById('saveDebtorNotesBtn').addEventListener('click', () => {
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            if (debtor) {
+                debtor.notes = document.getElementById('debtorNotesInput').value.trim();
+                saveDebtors();
+                showMessage('debtorNotesMessage', 'บันทึกรายละเอียดลูกหนี้เรียบร้อยแล้ว!', 'success');
+                updateDebtorNotesButtonText();
+            }
+        });
+
+        // --- Comment History Functions ---
+        function renderCommentHistory(debtor) {
+            const commentHistoryContainer = document.getElementById('commentHistoryContainer');
+            commentHistoryContainer.innerHTML = ''; // Clear existing comments
+
+            if (debtor.comments.length === 0) {
+                commentHistoryContainer.innerHTML = '<p style="text-align: center; color: #777; margin: 10px 0;">ไม่มีประวัติคอมเมนต์</p>';
+                return;
+            }
+
+            // Sort comments by timestamp descending (newest first)
+            const sortedComments = [...debtor.comments].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+            sortedComments.forEach(comment => {
+                const commentItem = document.createElement('div');
+                commentItem.className = 'comment-item';
+
+                const dateDisplay = new Date(comment.timestamp).toLocaleString('th-TH', {
+                    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                commentItem.innerHTML = `
+                    <div class="comment-date">${dateDisplay}</div>
+                    <div class="comment-text">${comment.text}</div>
+                `;
+                commentHistoryContainer.appendChild(commentItem);
+            });
+        }
+
+        document.getElementById('addCommentBtn').addEventListener('click', () => {
+            const debtor = debtors.find(d => d.id === currentDebtorId);
+            const newCommentText = document.getElementById('newCommentInput').value.trim();
+
+            if (!debtor) return;
+
+            if (newCommentText) {
+                debtor.comments.push({
+                    text: newCommentText,
+                    timestamp: new Date().toISOString()
+                });
+                saveDebtors();
+                showMessage('debtorCommentMessage', 'บันทึกคอมเมนต์เรียบร้อยแล้ว!', 'success');
+                document.getElementById('newCommentInput').value = ''; // Clear input
+                renderCommentHistory(debtor); // Re-render comments
+            } else {
+                showMessage('debtorCommentMessage', 'กรุณากรอกคอมเมนต์', 'error');
+            }
+        });
+
 
         // --- Monthly Report Functions ---
         function populateMonthlyReportSelect(debtor) {
@@ -1345,6 +1526,9 @@
                 // If not in sorting mode, allow default behavior for card clicks (show detail)
                 return true;
             }
+            // Only proceed if it's a single touch
+            if (e.touches.length !== 1) return;
+
             e.preventDefault(); // Prevent scrolling initially
             isDragging = false; // Reset drag state
             initialTouchY = e.touches[0].clientY;
@@ -1361,7 +1545,7 @@
         }
 
         function handleTouchMove(e) {
-            if (!draggedItem || !sortingMode) return;
+            if (!draggedItem || !sortingMode || e.touches.length !== 1) return;
 
             const currentTouchY = e.touches[0].clientY;
             const currentTouchX = e.touches[0].clientX;
@@ -1373,11 +1557,16 @@
                 if (!isDragging) { // Only set these once when dragging is confirmed
                     isDragging = true;
                     // Apply absolute positioning and other drag styles once dragging is confirmed
-                    draggedItem.style.position = 'absolute';
+                    draggedItem.style.position = 'fixed'; // Use fixed to prevent issues with scroll
                     draggedItem.style.zIndex = '1000';
-                    draggedItem.style.width = draggedItem.offsetWidth + 'px'; // Maintain width
-                    draggedItem.style.height = draggedItem.offsetHeight + 'px'; // Maintain height
+                    // Re-calculate width/height relative to viewport just in case
+                    draggedItem.style.width = draggedItem.offsetWidth + 'px';
+                    draggedItem.style.height = draggedItem.offsetHeight + 'px';
                     draggedItem.style.opacity = '0.8';
+                    // Adjust initial position based on current scroll position
+                    const currentScrollY = window.scrollY || window.pageYOffset;
+                    draggedItem.style.top = (draggedItem.getBoundingClientRect().top + currentScrollY) - draggedItemOffsetY + 'px';
+                    draggedItem.style.left = draggedItem.getBoundingClientRect().left - draggedItemOffsetX + 'px';
                 }
             }
 
@@ -1406,7 +1595,7 @@
                         if (draggedCenterY < childCenterY && draggedItem.nextElementSibling !== child) {
                             // If dragged item's center is above child's center, insert before child
                             debtorList.insertBefore(draggedItem, child);
-                            break;
+                            break; // Inserted, can stop
                         } else if (draggedCenterY > childCenterY && draggedItem.previousElementSibling !== child) {
                             // If dragged item's center is below child's center, insert after child
                             debtorList.insertBefore(draggedItem, child.nextSibling);
@@ -1451,7 +1640,6 @@
         // --- Event Listeners Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             loadDebtors();
-            loadCommonDescriptions(); // Load common descriptions on startup
             updateCurrentDateDisplay();
 
             // Handle browser history navigation (back/forward buttons)
